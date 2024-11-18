@@ -20,6 +20,10 @@ param location string
 // }
 param resourceGroupName string = ''
 
+param logAnalyticsName string = ''
+param applicationInsightsName string = ''
+param applicationInsightsDashboardName string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 
 // tags that should be applied to all resources.
@@ -39,7 +43,7 @@ var resourceToken = toLower(uniqueString(subscription().id, environmentName, loc
 // Example usage:
 //   tags: union(tags, { 'azd-service-name': apiServiceName })
 #disable-next-line no-unused-vars
-var apiServiceName = 'python-api'
+var apiServiceName = 'api'
 
 // Organize resources in a resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
@@ -52,6 +56,66 @@ resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
 // A full example that leverages azd bicep modules can be seen in the todo-python-mongo template:
 // https://github.com/Azure-Samples/todo-python-mongo/tree/main/infra
 
+// Monitor application with Azure Monitor
+module monitoring './core/monitor/monitoring.bicep' = {
+  name: 'monitoring'
+  scope: rg
+  params: {
+    location: location
+    tags: tags
+    logAnalyticsName: !empty(logAnalyticsName) ? logAnalyticsName : '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
+    applicationInsightsName: !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.insightsComponents}${resourceToken}'
+    applicationInsightsDashboardName: !empty(applicationInsightsDashboardName) ? applicationInsightsDashboardName : '${abbrs.portalDashboards}${resourceToken}'
+  }
+}
+
+
+module acr 'core/host/container-registry.bicep' = {
+  name: 'acr'
+  scope: rg
+  params: {
+    name: '${abbrs.containerRegistryRegistries}${resourceToken}'
+    location: location
+  }
+}
+
+module appservicePlan 'core/host/appserviceplan.bicep' = {
+  name: 'appservicePlan'
+  scope: rg
+  params: {
+    name: '${abbrs.webServerFarms}${resourceToken}'
+    location: location
+    sku: {
+      tier: 'Basic'
+      size: 'B1'
+      name: 'B1'
+    }
+  }
+}
+
+module app 'core/host/appservice.bicep' = {
+  name: 'app'
+  scope: rg
+  params: {
+    name: '${abbrs.webSitesAppService}${resourceToken}'
+    location: location
+    appServicePlanId: appservicePlan.outputs.id
+    runtimeName: 'php'
+    runtimeVersion: '8.3'
+  }
+}
+
+module otelCollector 'core/host/appservice.bicep' = {
+  name: 'otelCollector'
+  scope: rg
+  params: {
+    name: 'otel-${abbrs.webSitesAppService}${resourceToken}'
+    location: location
+    appServicePlanId: appservicePlan.outputs.id
+    runtimeName: 'custom'
+    runtimeVersion: '1.0'
+  }
+}
 
 
 // Add outputs from the deployment here, if needed.
