@@ -1,75 +1,101 @@
-# Azure Developer CLI (azd) Bicep Starter
+# 概要
 
-A starter blueprint for getting your application up on Azure using [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/overview) (azd). Add your application code, write Infrastructure as Code assets in [Bicep](https://aka.ms/bicep) to get your application up and running quickly.
+Opentelemetryを使ってLaravelの可観測性を上げるサンプルプロジェクトです。
+azdを使ってインフラ構築、デプロイ(今後)を行います。
 
-The following assets have been provided:
+## 前提条件
 
-- Infrastructure-as-code (IaC) Bicep files under the `infra` folder that demonstrate how to provision resources and setup resource tagging for azd.
-- A [dev container](https://containers.dev) configuration file under the `.devcontainer` directory that installs infrastructure tooling by default. This can be readily used to create cloud-hosted developer environments such as [GitHub Codespaces](https://aka.ms/codespaces).
-- Continuous deployment workflows for CI providers such as GitHub Actions under the `.github` directory, and Azure Pipelines under the `.azdo` directory that work for most use-cases.
+- Dockerがインストールされていること。
+(Docker Desktopを推奨します。)
 
-## Next Steps
+- azdがインストールされていること。
+  - azd auth loginを実行してログインしてください。
 
-### Step 1: Add application code
+## 依存パッケージ
 
-1. Initialize the service source code projects anywhere under the current directory. Ensure that all source code projects can be built successfully.
-    - > Note: For `function` services, it is recommended to initialize the project using the provided [quickstart tools](https://learn.microsoft.com/en-us/azure/azure-functions/functions-get-started).
-2. Once all service source code projects are building correctly, update `azure.yaml` to reference the source code projects.
-3. Run `azd package` to validate that all service source code projects can be built and packaged locally.
+```php
+composer require open-telemetry/sdk
+composer require open-telemetry/exporter-otlp
+composer require guzzlehttp/guzzle
+composer require php-http/guzzle7-adapter
+composer require open-telemetry/opentelemetry-auto-laravel
 
-### Step 2: Provision Azure resources
+# for distributed tracing 
+composer require open-telemetry/opentelemetry-auto-psr15
+composer require open-telemetry/opentelemetry-auto-psr18
+composer require open-telemetry/opentelemetry-auto-guzzle
+```
 
-Update or add Bicep files to provision the relevant Azure resources. This can be done incrementally, as the list of [Azure resources](https://learn.microsoft.com/en-us/azure/?product=popular) are explored and added.
+### Optional
 
-- A reference library that contains all of the Bicep modules used by the azd templates can be found [here](https://github.com/Azure-Samples/todo-nodejs-mongo/tree/main/infra/core).
-- All Azure resources available in Bicep format can be found [here](https://learn.microsoft.com/en-us/azure/templates/).
+オプションとして、Laravelがロギングに使用しているパッケージであるmonologに計装を作成することで、各トレースにログを添付することができます。この方法を使う利点は、OpenTelemetry SDKに、トレースへのログの自動相関をさせることです。
 
-Run `azd provision` whenever you want to ensure that changes made are applied correctly and work as expected.
+```php
+composer require \
+  monolog/monolog \
+  open-telemetry/opentelemetry-logger-monolog
+```
 
-### Step 3: Tie in application and infrastructure
+grpc
 
-Certain changes to Bicep files or deployment manifests are required to tie in application and infrastructure together. For example:
+```php
+composer require grpc/grpc@1.57.0
+composer require open-telemetry/transport-grpc
+```
 
-1. Set up [application settings](#application-settings) for the code running in Azure to connect to other Azure resources.
-1. If you are accessing sensitive resources in Azure, set up [managed identities](#managed-identities) to allow the code running in Azure to securely access the resources.
-1. If you have secrets, it is recommended to store secrets in [Azure Key Vault](#azure-key-vault) that then can be retrieved by your application, with the use of managed identities.
-1. Configure [host configuration](#host-configuration) on your hosting platform to match your application's needs. This may include networking options, security options, or more advanced configuration that helps you take full advantage of Azure capabilities.
+もしgrpcがインストールされていない場合環境変数を`OTEL_EXPORTER_OTLP_PROTOCOLを"grpc"から"http/json"`に変更する必要があります。
 
-For more details, see [additional details](#additional-details) below.
+下記画像はdocker-composeを使った環境変数の例です。
+![docker-compose](./docs/images/docker-compose.png)
 
-When changes are made, use azd to validate and apply your changes in Azure, to ensure that they are working as expected:
+## インフラの構築
 
-- Run `azd up` to validate both infrastructure and application code changes.
-- Run `azd deploy` to validate application code changes only.
+```bash
+azd provision
+```
 
-### Step 4: Up to Azure
+このコマンドでインフラが構築されます。
 
-Finally, run `azd up` to run the end-to-end infrastructure provisioning (`azd provision`) and deployment (`azd deploy`) flow. Visit the service endpoints listed to see your application up-and-running!
+## ローカルでの実行
 
-## Additional Details
+.env.exampleをコピーして.envを作成します。
 
-The following section examines different concepts that help tie in application and infrastructure.
+```bash
+cp .env.example .env
+```
 
-### Application settings
+.env内の
+`APPLICATIONINSIGHTS_CONNECTION_STRING`の値を作成したApplicationInsightsの接続文字列に変えます。
 
-It is recommended to have application settings managed in Azure, separating configuration from code. Typically, the service host allows for application settings to be defined.
+```.env
+APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=xxxxx..."
+```
 
-- For `appservice` and `function`, application settings should be defined on the Bicep resource for the targeted host. Reference template example [here](https://github.com/Azure-Samples/todo-nodejs-mongo/tree/main/infra).
-- For `aks`, application settings are applied using deployment manifests under the `<service>/manifests` folder. Reference template example [here](https://github.com/Azure-Samples/todo-nodejs-mongo-aks/tree/main/src/api/manifests).
+```bash
+docker compose up -d --build --force-recreate
+```
 
-### Managed identities
+こちらでコンテナが立ち上がります。
+またmakeコマンドが使えれば下記のコマンドでコンテナを立ち上げることができます。
 
-[Managed identities](https://learn.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview) allows you to secure communication between services. This is done without having the need for you to manage any credentials.
+```bash
+make up
+```
 
-### Azure Key Vault
+リソースを消す場合は下記のコマンドを実行してください。
 
-[Azure Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/general/overview) allows you to store secrets securely. Your application can access these secrets securely through the use of managed identities.
+```bash
+docker compose down
+```
 
-### Host configuration
+makeコマンドが使えれば下記のコマンドでコンテナを消すことができます。
 
-For `appservice`, the following host configuration options are often modified:
+```bash
+make down
+```
 
-- Language runtime version
-- Exposed port from the running container (if running a web service)
-- Allowed origins for CORS (Cross-Origin Resource Sharing) protection (if running a web service backend with a frontend)
-- The run command that starts up your service
+## 参照
+
+[How To Use OpenTelemetry in Laravel 11](https://www.gmhafiz.com/blog/laravel-with-opentelemetry/)
+
+[Laravel 11 with OpenTelemetry ソースコード例](https://codeberg.org/gmhafiz/observability/src/branch/master/laravel)
