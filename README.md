@@ -3,6 +3,14 @@
 Opentelemetryを使ってLaravelの可観測性を上げるサンプルプロジェクトです。
 azdを使ってインフラ構築、デプロイ(今後)を行います。
 
+## 前提条件
+
+- Dockerがインストールされていること。
+(Docker Desktopを推奨します。)
+
+- azdがインストールされていること。
+  - azd auth loginを実行してログインしてください。
+
 ## 依存パッケージ
 
 ```php
@@ -26,6 +34,64 @@ composer require open-telemetry/opentelemetry-auto-guzzle
 composer require \
   monolog/monolog \
   open-telemetry/opentelemetry-logger-monolog
+```
+
+grpc
+
+```php
+composer require grpc/grpc@1.57.0
+composer require open-telemetry/transport-grpc
+```
+
+もしgrpcがインストールされていない場合環境変数を`OTEL_EXPORTER_OTLP_PROTOCOLを"grpc"から"http/json"`に変更する必要があります。
+
+下記画像はdocker-composeを使った環境変数の例です。
+![docker-compose](./docs/images/docker-compose.png)
+
+## インフラの構築
+
+```bash
+azd provision
+```
+
+このコマンドでインフラが構築されます。
+
+## ローカルでの実行
+
+.env.exampleをコピーして.envを作成します。
+
+```bash
+cp .env.example .env
+```
+
+.env内の
+`APPLICATIONINSIGHTS_CONNECTION_STRING`の値を作成したApplicationInsightsの接続文字列に変えます。
+
+```.env
+APPLICATIONINSIGHTS_CONNECTION_STRING="InstrumentationKey=xxxxx..."
+```
+
+```bash
+docker compose up -d --build --force-recreate
+```
+
+こちらでコンテナが立ち上がります。
+またmakeコマンドが使えれば下記のコマンドでコンテナを立ち上げることができます。
+
+```bash
+make up
+```
+
+リソースを消す場合は下記のコマンドを実行してください。
+
+```bash
+docker compose down
+```
+
+makeコマンドが使えれば下記のコマンドでコンテナを消すことができます。
+
+```bash
+make down
 ```
 
 ## 参照
