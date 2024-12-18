@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  laravel:
+    image: laravel_image
+    container_name: "laravel_container"
+    env_file:
+      - .env
+    build:
+      context: ./src/laravel
+      dockerfile: Dockerfile
+    ports:
+      - ${PHP_PORT}:80
+    environment:
+      - APP_KEY=${APP_KEY}
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - LOG_JSON=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=${DB_LARAVEL_HOST}
+      - DB_PORT=${DB_LARAVEL_PORT}
+      - DB_DATABASE=${DB_LARAVEL_NAME}
+      - DB_USERNAME=${DB_LARAVEL_USER}
+      - DB_PASSWORD=${DB_LARAVEL_PASS}
+      - OTEL_PHP_AUTOLOAD_ENABLED=true
+      - OTEL_SERVICE_NAME=laravel
+      - OTEL_METRIC_EXPORTER=none
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_TRACES_SAMPLER_ARG=1
+      - REDIS_HOST=redis
+    volumes:
+      - ./src/laravel:/var/www/
+    depends_on:
+      - postgres-laravel
+      - otel-collector
+      - redis
+  grafana:
+    image: grafana/grafana:${GRAFANA_IMG}
+    restart: "no"
+    volumes:
+      - grafanaVolume:/var/lib/grafana
+      - ./src/opentelemetry/provisioning:/etc/grafana/provisioning
+      - ./src/opentelemetry/dashboards:/etc/grafana/dashboards
+    environment:
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    ports:
+      - ${GRAFANA_PORT}:3000
+
+  otel-collector:
+    image: ${OTELCOL_IMG}
+    restart: "no"
+    command: ["--config=/etc/otel-collector-config.yaml", "${OTELCOL_ARGS}"]
+    env_file:
+      - .env
+    volumes:
+      - ./src/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver.
+      - "4318:4318"   # OTLP http receiver.
+
+  prometheus:
+    image: prom/prometheus:${PROM_IMG}
+    restart: "no"
+    volumes:
+      - ./src/opentelemetry/prometheus.yaml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--enable-feature=exemplar-storage'
+
+  jaeger:
+    image: jaegertracing/all-in-one:${JAEGER_IMG}
+    restart: "no"
+    ports:
+      - "16686:16686"
+
+  postgres-laravel:
+    image: postgres:17
+    restart: "no"
+    healthcheck:
+      test: pg_isready -U ${DB_LARAVEL_USER}
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_USER=${DB_LARAVEL_USER}
+      - POSTGRES_PASSWORD=${DB_LARAVEL_PASS}
+      - POSTGRES_DB=${DB_LARAVEL_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresLaravelVolume:/var/lib/postgresql/data
+  redis:
+    image: valkey/valkey:7.2
+    expose:
+      - 6379
+volumes:
+  postgresLaravelVolume:
+  grafanaVolume:
+  

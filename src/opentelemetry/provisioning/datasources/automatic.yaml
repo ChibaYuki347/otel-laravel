@@ -1,0 +1,21 @@
+# Configuration file version
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    url: http://prometheus:9090
+    version: 1
+    uid: "edc123e5-c122-4428-b70a-dd054b207342"
+    editable: true
+
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    orgId: 1
+    url: http://jaeger:16686
+    version: 1
+    uid: "ba10f201-5507-4a1a-a82d-7f03156b1f17"
+    editable: true
