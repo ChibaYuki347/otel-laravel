@@ -3,6 +3,14 @@
 Opentelemetryを使ってLaravelの可観測性を上げるサンプルプロジェクトです。
 azdを使ってインフラ構築、デプロイ(今後)を行います。
 
+## 構成
+
+![アーキテクチャ](./docs/images/architecture.png)
+
+App Serviceのカスタムコンテナを複数、もしくはサイドカーでOpenTelemetry Collectorを立ち上げ、そこからAzure Monitorにデータを送信します。
+
+送られたデータはApplication Insightsに格納され、可観測性を上げることができます。
+
 ## 前提条件
 
 - Dockerがインストールされていること。
@@ -47,6 +55,10 @@ composer require open-telemetry/transport-grpc
 
 下記画像はdocker-composeを使った環境変数の例です。
 ![docker-compose](./docs/images/docker-compose.png)
+
+### 設定とApplication Insightsアウトプットについて
+
+[設定と詳細](./docs/detailed.md)をご覧ください。
 
 ## インフラの構築
 
