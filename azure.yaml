@@ -6,32 +6,27 @@
 
 # Name of the application.
 name: laravel-otel
-# services:
-  ## An example for a Laravel API service.
-  ## The service is named 'laravel-api'.
-  ## The language is 'php'.
-  ## The source code is located in the project (azure.yaml) directory.
-  ## The service will be hosted on Azure App Service.
-
-# services:
-#   ## An example for a python API service.
-#   ## The service is named 'python-api'.
-#   ## The language is 'python'.
-#   ## The source code is located in the project (azure.yaml) directory.
-#   ## The service will be hosted on Azure App Service.
-#   python-api:
-#     language: python
-#     project: ./
-#     host: appservice
-#   ## An example for a NodeJS API, located in src/api.
-#   nodejs-api:
-#     language: js
-#     project: ./src/api
-#     host: appservice
-#   ## An example for a React front-end app.
-#   ## The src/react-app/build folder is where the app is built to after `npm run build`.
-#   react-web:
-#     language: js
-#     project: ./src/react-app
-#     host: appservice
-#     dist: build
+hooks:
+  postprovision: 
+    posix:
+      shell: sh
+      continueOnError: false
+      interactive: true
+      run: |
+        ./scripts/azAcrBuild.sh
+    windows:
+      shell: sh
+      continueOnError: false
+      interactive: true
+      run: .\scripts\azAcrBuild.ps1
+  # predeploy: 
+  #   posix:
+  #     shell: sh
+  #     continueOnError: false
+  #     interactive: true
+  #     run: ./scripts/deploy.sh
+  #   windows:
+  #     shell: sh
+  #     continueOnError: false
+  #     interactive: true
+  #     run: .\scripts\deploy.ps1

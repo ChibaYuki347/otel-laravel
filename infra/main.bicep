@@ -24,6 +24,9 @@ param logAnalyticsName string = ''
 param applicationInsightsName string = ''
 param applicationInsightsDashboardName string = ''
 
+//Laravel App Key
+param laravelAppKey string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 
 // tags that should be applied to all resources.
@@ -69,54 +72,87 @@ module monitoring './core/monitor/monitoring.bicep' = {
   }
 }
 
-
-module acr 'core/host/container-registry.bicep' = {
+// ACR with Managed Identity
+module acrwithmi 'acr-mi.bicep' = {
   name: 'acr'
   scope: rg
   params: {
-    name: '${abbrs.containerRegistryRegistries}${resourceToken}'
     location: location
   }
 }
 
-module appservicePlan 'core/host/appserviceplan.bicep' = {
-  name: 'appservicePlan'
+module appserviceplan 'core/host/appserviceplan.bicep' = {
+  name: 'appserviceplan'
   scope: rg
   params: {
     name: '${abbrs.webServerFarms}${resourceToken}'
     location: location
+    tags: tags
     sku: {
-      tier: 'Basic'
-      size: 'B1'
       name: 'B1'
     }
   }
 }
 
-module app 'core/host/appservice.bicep' = {
-  name: 'app'
+// module appservice 'core/host/appservice-w-sidecar.bicep' = {
+//   name: 'appservice'
+//   scope: rg
+//   params: {
+//     location: location
+//     appServicePlanId: appserviceplan.outputs.id
+//     applicationInsightsName: !empty(applicationInsightsName) ? applicationInsightsName : '${abbrs.insightsComponents}${resourceToken}'
+//     acrLoginServer: acrwithmi.outputs.ACR_NAME
+//     webAppName: '${abbrs.webSitesAppService}${resourceToken}'
+//     useUserAssignedManagedIdentity: true
+//     managedIdentityName: acrwithmi.outputs.MI_NAME
+//     appSettings: {
+//       // For OpenTelemetry Collector  
+//       OTEL_TRACES_EXPORTER: 'otlp'
+//       OTEL_METRICS_EXPORTER: 'otlp'
+//       OTEL_LOGS_EXPORTER: 'otlp'
+//       OTEL_EXPORTER_OTLP_COMPRESSION: 'gzip'
+//       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://localhost:4318'
+//       OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: 'cumulative'
+//       OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION: 'explicit_bucket_histogram'
+//       OTEL_TRACES_SAMPLER: 'parentbased_traceidratio'
+//       OTEL_TRACES_SAMPLER_ARG: 1
+//       // For Laravel
+//       APP_KEY: laravelAppKey
+//       DB_LARAVEL_HOST:  psqldb.outputs.POSTGRES_DOMAIN_NAME
+//       DB_LARAVEL_PORT: '5432'
+//       DB_LARAVEL_NAME: 'laravel'
+//       DB_LARAVEL_USER: 'postgresadmin'
+//       DB_LARAVEL_PASS: 'password'
+//       DB_LARAVEL_SSLMODE: 'disable'
+//       OTEL_PHP_AUTOLOAD_ENABLED: true
+//     }
+//   }
+// }
+
+module psqldb 'core/database/postgresql/flexibleserver.bicep' = {
+  name: 'psqldb'
   scope: rg
   params: {
-    name: '${abbrs.webSitesAppService}${resourceToken}'
+    name: '${abbrs.dBforPostgreSQLServers}${resourceToken}'
     location: location
-    appServicePlanId: appservicePlan.outputs.id
-    runtimeName: 'php'
-    runtimeVersion: '8.3'
+    sku: {
+      name: 'Standard_B1ms'
+      tier: 'Burstable'
+      capacity: 1
+    }
+    storage: {
+      autoGrow: true
+      storageSizeGB: 512
+    }
+    administratorLogin: 'postgresadmin'
+    administratorLoginPassword: 'password'
+    databaseNames: [
+      'laravel'
+    ]
+    version: '13'
+    allowAzureIPsFirewall: true
   }
 }
-
-module otelCollector 'core/host/appservice.bicep' = {
-  name: 'otelCollector'
-  scope: rg
-  params: {
-    name: 'otel-${abbrs.webSitesAppService}${resourceToken}'
-    location: location
-    appServicePlanId: appservicePlan.outputs.id
-    runtimeName: 'custom'
-    runtimeVersion: '1.0'
-  }
-}
-
 
 // Add outputs from the deployment here, if needed.
 //
@@ -129,3 +165,6 @@ module otelCollector 'core/host/appservice.bicep' = {
 output AZURE_LOCATION string = location
 output AZURE_TENANT_ID string = tenant().tenantId
 output APPLICATION_INSIGHTS_CONNECTION_STRING string = monitoring.outputs.applicationInsightsConnectionString
+output CONTAINER_REGISTRY_NAME string = acrwithmi.outputs.ACR_NAME
+// output WEB_APP_NAME string = appservice.outputs.name
+

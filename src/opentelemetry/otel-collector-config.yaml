@@ -1,71 +1,38 @@
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: otel-collector:4317
-      http:
-        endpoint: otel-collector:4318
-        cors:
-          allowed_origins:
-            - "http://*"
-            - "https://*"
-
-processors:
-  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor
-  batch:
-
-  memory_limiter:
-    # 80% of maximum memory up to 2G
-    limit_mib: 4000
-    # 25% of limit up to 2G
-    spike_limit_mib: 1000
-    check_interval: 5s
-
-  # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/filterprocessor/README.md
-  filter/ignore:
-    traces:
-      span:
-        - attributes["http.route"] == "api/metrics"
-        - resource.attributes["process.command"] == "artisan" # TODO: disable for now. 1. Background jobs need to inherit traceID. 2. Ensure only picked up jobs get instrumented instead of all Laravel's queue poll.       
-
-exporters:
-  prometheus:
-    endpoint: otel-collector:8889
-
-  debug:
-    verbosity: detailed
-
-  azuremonitor:
-    connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
-  
-  otlp:
-    endpoint: jaeger:4317
-    tls:
-      insecure: true
-    retry_on_failure:
-      enabled: true
-    sending_queue:
-      enabled: false
-
 extensions:
   health_check:
   pprof:
-    endpoint: otel-collector:1888
   zpages:
-    endpoint: otel-collector:55679
-  
+
+receivers:
+  otlp:
+    protocols:
+      grpc: 
+        endpoint: 0.0.0.0:4317
+      http: 
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_max_size: 100
+    send_batch_size: 10
+    timeout: 10s            
+
+exporters:
+  debug:
+    verbosity: detailed
+  azuremonitor:
+    connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
 service:
-  extensions: [pprof, zpages, health_check]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch, memory_limiter, filter/ignore]
-      exporters: [debug, otlp, azuremonitor]
+      exporters: [azuremonitor, debug]
+      processors: [batch]
     metrics:
       receivers: [otlp]
-      processors: [batch, memory_limiter]
-      exporters: [debug, prometheus, azuremonitor]
+      exporters: [azuremonitor, debug]
+      processors: [batch]
     logs:
       receivers: [otlp]
-      processors: [batch, memory_limiter]
-      exporters: [debug, azuremonitor]
+      exporters: [azuremonitor, debug]
+      processors: [batch]

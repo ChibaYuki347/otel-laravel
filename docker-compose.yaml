@@ -37,44 +37,20 @@ services:
       - postgres-laravel
       - otel-collector
       - redis
-  grafana:
-    image: grafana/grafana:${GRAFANA_IMG}
-    restart: "no"
-    volumes:
-      - grafanaVolume:/var/lib/grafana
-      - ./src/opentelemetry/provisioning:/etc/grafana/provisioning
-      - ./src/opentelemetry/dashboards:/etc/grafana/dashboards
-    environment:
-      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
-    ports:
-      - ${GRAFANA_PORT}:3000
-
   otel-collector:
-    image: ${OTELCOL_IMG}
+    build:
+      context: ./src/opentelemetry
     restart: "no"
-    command: ["--config=/etc/otel-collector-config.yaml", "${OTELCOL_ARGS}"]
+    command: ["--config=/etc/configs/otel-collector-config.yaml", "${OTELCOL_ARGS}"]
     env_file:
       - .env
-    volumes:
-      - ./src/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    # volumes:
+    #   - ./src/opentelemetry/otel-collector-config.yaml:/etc/configs/otel-collector-config.yaml
     ports:
       - "4317:4317"   # OTLP gRPC receiver.
       - "4318:4318"   # OTLP http receiver.
-
-  prometheus:
-    image: prom/prometheus:${PROM_IMG}
-    restart: "no"
-    volumes:
-      - ./src/opentelemetry/prometheus.yaml:/etc/prometheus/prometheus.yml
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--enable-feature=exemplar-storage'
-
-  jaeger:
-    image: jaegertracing/all-in-one:${JAEGER_IMG}
-    restart: "no"
-    ports:
-      - "16686:16686"
+      - "55679:55679" # zPages.
+      - "1777:1777"  # pprof.
 
   postgres-laravel:
     image: postgres:17
@@ -98,5 +74,4 @@ services:
       - 6379
 volumes:
   postgresLaravelVolume:
-  grafanaVolume:
   
